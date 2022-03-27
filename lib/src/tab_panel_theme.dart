@@ -2,7 +2,6 @@ import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 
 final _defaultTabPanelTheme = const TabPanelThemeData();
 
@@ -23,7 +22,7 @@ class TabPanelThemeData with Diagnosticable {
   /// The color of the divider which acts as a drag handle to resize the panel.
   final Color dividerColor;
 
-  /// The color of the divider which acts as a drag handle to resize the panel.
+  /// The width of the divider which acts as a drag handle to resize the panel.
   final double dividerWidth;
 
   /// Creates a copy of this object with the given fields replaced with the

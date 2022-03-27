@@ -1,6 +1,5 @@
 import '../tabpanel.dart';
-import 'tab_panel.dart';
-import 'package:flutter/material.dart' hide Tab;
+import 'package:flutter/widgets.dart';
 import 'package:mobx/mobx.dart';
 
 part 'tab.g.dart';

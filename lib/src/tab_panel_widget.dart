@@ -1,11 +1,14 @@
-import 'package:flutter/material.dart' hide Tab;
-import 'package:flutter/rendering.dart';
+import 'package:flutter/material.dart' hide Tab, Icons;
+import 'package:desktop/desktop.dart' show Icons;
+
 import 'package:flutter_mobx/flutter_mobx.dart';
+import 'package:provider/provider.dart';
 import 'package:tabpanel/src/tab_panel_theme.dart';
-import 'context_menu.dart';
+import 'default_tab_panel_layout_delegate.dart';
 import 'tab_panel.dart';
 
 import 'tab.dart';
+import 'tab_panel_layout_delegate.dart';
 import 'tab_widget.dart';
 
 /// Displays a tab panel. Tab panels can be split horizontally or vertically
@@ -27,211 +30,153 @@ import 'tab_widget.dart';
 /// ```
 class TabPanelWidget extends StatelessWidget {
   final TabPanel panel;
+  final TabPanelLayoutDelegate? layout;
 
-  const TabPanelWidget(
-    this.panel, {
-    Key? key,
-  }) : super(key: key);
+  const TabPanelWidget(this.panel, {Key? key, this.layout}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return DragTarget<Tab>(
-      onWillAccept: panel.willAcceptTab,
-      onAccept: panel.acceptTab,
-      builder: (_, __, ___) => Material(
-        child: Observer(builder: (_) {
-          final panels = panel.panels;
-          final panelsCount = panels.length;
+    final layout = this.layout ?? DefaultTabPanelLayoutDelegate(context);
+    return Provider<TabPanelLayoutDelegate>.value(
+        value: layout,
+        child: DragTarget<Tab>(
+          onWillAccept: panel.willAcceptTab,
+          onAccept: panel.acceptTab,
+          builder: (_, __, ___) => Container(
+            child: Observer(builder: (_) {
+              final panels = panel.panels;
+              final panelsCount = panels.length;
 
-          if (panels.isNotEmpty) {
-            return LayoutBuilder(builder: (context, constraints) {
-              final tabPanelTheme = TabPanelTheme.of(context);
+              if (panels.isNotEmpty) {
+                return LayoutBuilder(builder: (context, constraints) {
+                  final tabPanelTheme = TabPanelTheme.of(context);
+                  print('xxx: $constraints');
+                  panel.calculatePanelSizes(
+                      constraints, tabPanelTheme.dividerWidth);
 
-              panel.calculatePanelSizes(
-                  constraints, tabPanelTheme.dividerWidth);
+                  // Store the constraints for later
+                  panel.constraints = constraints;
 
-              // Store the constraints for later
-              panel.constraints = constraints;
+                  // Create the divider widget
+                  final divider = panel.axis == Axis.vertical
+                      ? MouseRegion(
+                          cursor: SystemMouseCursors.resizeRow,
+                          child: Container(
+                            height: tabPanelTheme.dividerWidth,
+                            width: constraints.maxWidth,
+                            color: tabPanelTheme.dividerColor,
+                          ),
+                        )
+                      : MouseRegion(
+                          cursor: SystemMouseCursors.resizeColumn,
+                          child: Container(
+                            width: tabPanelTheme.dividerWidth,
+                            height: constraints.maxHeight,
+                            color: tabPanelTheme.dividerColor,
+                          ),
+                        );
 
-              // Create the divider widget
-              final divider = panel.axis == Axis.vertical
-                  ? MouseRegion(
-                      cursor: SystemMouseCursors.resizeRow,
-                      child: Container(
-                        height: tabPanelTheme.dividerWidth,
-                        width: constraints.maxWidth,
-                        color: tabPanelTheme.dividerColor,
-                      ),
-                    )
-                  : MouseRegion(
-                      cursor: SystemMouseCursors.resizeColumn,
-                      child: Container(
-                        width: tabPanelTheme.dividerWidth,
-                        height: constraints.maxHeight,
-                        color: tabPanelTheme.dividerColor,
-                      ),
+                  // Create the children panel widgets, separated by the dividers
+                  final children = <Widget>[];
+                  for (var i = 0; i < panelsCount; i++) {
+                    children.add(
+                      Observer(builder: (_) {
+                        final size = (panel.panelSizes?.isNotEmpty ?? false)
+                            ? panel.panelSizes![i]
+                            : 20.0;
+                        return SizedBox(
+                          height: panel.axis == Axis.vertical
+                              ? size
+                              : double.infinity,
+                          width: panel.axis == Axis.horizontal
+                              ? size
+                              : double.infinity,
+                          child: i < panels.length
+                              ? TabPanelWidget(
+                                  panels[i],
+                                  layout: this.layout,
+                                )
+                              : SizedBox.shrink(),
+                        );
+                      }),
                     );
 
-              // Create the children panel widgets, separated by the dividers
-              final children = <Widget>[];
-              for (var i = 0; i < panelsCount; i++) {
-                children.add(
-                  Observer(builder: (_) {
-                    final size = (panel.panelSizes?.isNotEmpty ?? false)
-                        ? panel.panelSizes![i]
-                        : 20.0;
-                    return SizedBox(
-                      height:
-                          panel.axis == Axis.vertical ? size : double.infinity,
-                      width: panel.axis == Axis.horizontal
-                          ? size
-                          : double.infinity,
-                      child: i < panels.length
-                          ? TabPanelWidget(panels[i])
-                          : SizedBox.shrink(),
-                    );
-                  }),
-                );
+                    if (i != panelsCount - 1) {
+                      children.add(
+                        Draggable(
+                          data: 1,
+                          maxSimultaneousDrags: 1,
+                          axis: panel.axis,
+                          affinity: panel.axis,
+                          feedback: SizedBox.shrink(),
+                          onDragUpdate: (details) =>
+                              panel.updateSize(i, details),
+                          child: divider,
+                        ),
+                      );
+                    }
+                  }
 
-                if (i != panelsCount - 1) {
-                  children.add(
-                    Draggable(
-                      data: 1,
-                      maxSimultaneousDrags: 1,
-                      axis: panel.axis,
-                      affinity: panel.axis,
-                      feedback: SizedBox.shrink(),
-                      onDragUpdate: (details) => panel.updateSize(i, details),
-                      child: divider,
-                    ),
-                  );
-                }
+                  return panel.axis == Axis.horizontal
+                      ? Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: children,
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: children,
+                        );
+                });
               }
 
-              return panel.axis == Axis.horizontal
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: children,
-                    )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: children,
-                    );
-            });
-          }
+              // -- The panel has no children panel, so we render the tabs instead
+              final selectedTab =
+                  panel.tabs.isNotEmpty && panel.selectedTab < panel.tabs.length
+                      ? panel.tabs[panel.selectedTab]
+                      : null;
 
-          // -- The panel has no children panel, so we render the tabs instead
-          final selectedTab =
-              panel.tabs.isNotEmpty && panel.selectedTab < panel.tabs.length
-                  ? panel.tabs[panel.selectedTab]
-                  : null;
-
-          return Column(
-            children: [
-              Row(
+              return Column(
                 children: [
-                  IconButton(
-                    icon: Icon(Icons.chevron_left),
-                    onPressed: (selectedTab?.pages.length ?? 0) > 1
-                        ? selectedTab!.pop
-                        : null,
-                  ),
-                  // -- TabBar
-                  Expanded(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: panel.tabs
-                            .map((tab) => TabWidget(
-                                  tab,
-                                  selected: tab.id == selectedTab?.id,
-                                ))
-                            .toList(),
-                      ),
+                  layout.buildTabBarContainer(
+                    Row(
+                      children: [
+                        layout.buildTabBarLeadingWidget(selectedTab),
+                        // -- TabBar
+                        Expanded(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: panel.tabs
+                                      .map<Widget>((tab) => TabWidget(
+                                            tab,
+                                            selected: tab.id == selectedTab?.id,
+                                          ))
+                                      .toList() +
+                                  [
+                                    if (panel.tabs.isNotEmpty)
+                                      layout.buildNewTabButton(
+                                          () => panel.newTab())
+                                  ],
+                            ),
+                          ),
+                        ),
+                        layout.buildTabBarMenuButton(panel),
+                      ],
                     ),
                   ),
-                  _panelMenu(context),
+                  Expanded(
+                    child: selectedTab != null
+                        ? ParentTab(
+                            tab: selectedTab,
+                            child: selectedTab.pages.last,
+                          )
+                        : layout.buildEmptyPanel(panel),
+                  ),
                 ],
-              ),
-              Container(
-                height: 1,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(.2),
-              ),
-              Expanded(
-                child: selectedTab != null
-                    ? ParentTab(
-                        tab: selectedTab,
-                        child: selectedTab.pages.last,
-                      )
-                    : EmptyPanel(panel),
-              ),
-            ],
-          );
-        }),
-      ),
-    );
-  }
-
-  ContextMenu _panelMenu(BuildContext context) {
-    return ContextMenu(
-      icon: Icon(
-        Icons.more_horiz,
-        color: Theme.of(context).colorScheme.onSurface,
-      ),
-      showOnTap: true,
-      menuItems: [
-        ContextMenuItem(
-          title: Text('New Tab'),
-          icon: Icon(Icons.edit),
-          onPressed: () => panel.newTab(),
-        ),
-        ContextMenuItem(),
-        ContextMenuItem(
-          title: Text('Split right'),
-          icon: Icon(Icons.arrow_right),
-          onPressed: () => panel.splitPanel(
-            panelId: panel.id,
-            axis: Axis.horizontal,
-            position: TabPosition.after,
+              );
+            }),
           ),
-        ),
-        ContextMenuItem(
-          title: Text('Split left'),
-          icon: Icon(Icons.arrow_left),
-          onPressed: () => panel.splitPanel(
-            panelId: panel.id,
-            axis: Axis.horizontal,
-            position: TabPosition.before,
-          ),
-        ),
-        ContextMenuItem(
-          title: Text('Split down'),
-          icon: Icon(Icons.arrow_drop_down),
-          onPressed: () => panel.splitPanel(
-            panelId: panel.id,
-            axis: Axis.vertical,
-            position: TabPosition.after,
-          ),
-        ),
-        ContextMenuItem(
-          title: Text('Split up'),
-          icon: Icon(Icons.arrow_drop_up),
-          onPressed: () => panel.splitPanel(
-            panelId: panel.id,
-            axis: Axis.vertical,
-            position: TabPosition.before,
-          ),
-        ),
-        if (panel.parent != null) ...[
-          ContextMenuItem(),
-          ContextMenuItem(
-            title: Text('Close'),
-            icon: Icon(Icons.close),
-            onPressed: panel.closePanel,
-          ),
-        ],
-      ],
-    );
+        ));
   }
 }
 

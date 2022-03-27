@@ -1,29 +1,34 @@
-import 'context_menu.dart';
-import 'tab_panel.dart';
-import 'package:flutter/material.dart' hide Tab;
-import 'package:flutter/rendering.dart';
-import 'package:flutter_mobx/flutter_mobx.dart';
+import 'package:provider/src/provider.dart';
 
+import 'context_menu.dart';
+import 'context_menu_item.dart';
+import 'tab_panel.dart';
+import 'package:flutter/material.dart' hide Tab, Icons;
+import 'package:flutter_mobx/flutter_mobx.dart';
+import 'package:desktop/desktop.dart' show Icons;
 import 'tab.dart';
+import 'tab_panel_layout_delegate.dart';
 
 class TabWidget extends StatelessWidget {
   final Tab tab;
   final bool selected;
   final bool feedback;
+  final TabPanelLayoutDelegate? layout;
 
   const TabWidget(
     this.tab, {
     Key? key,
     this.selected = false,
     this.feedback = false,
+    this.layout,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    final layoutDelegate = layout ?? context.watch<TabPanelLayoutDelegate>();
     final lastPage = tab.pages.isNotEmpty ? tab.pages.last : null;
 
-    final defaultIcon =
-        Icon(Icons.tab, color: Theme.of(context).colorScheme.onSurface);
+    final defaultIcon = layoutDelegate.defaultTabIcon;
     Widget icon;
     String title;
     if (lastPage is TabPageMixin) {
@@ -37,63 +42,34 @@ class TabWidget extends StatelessWidget {
       title = tabPage.title;
     } else {
       icon = defaultIcon;
-      title = lastPage?.runtimeType.toString() ?? 'Tab';
+      title =
+          lastPage?.runtimeType.toString() ?? layoutDelegate.defaultTabTitle;
     }
 
-    final _tab = Container(
-      decoration: BoxDecoration(
-          color: selected
-              ? Theme.of(context).colorScheme.primary.withOpacity(0.5)
-              : Theme.of(context).colorScheme.surface,
-          border: Border.symmetric(
-            vertical: BorderSide(
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
-            ),
-          )),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(minHeight: 40),
-        child: Observer(builder: (context) {
-          return Row(
-            children: [
-              VerticalDivider(width: 1),
-              SizedBox(width: 8),
-              if (feedback)
-                icon
-              else
-                Draggable<Tab>(
-                  data: tab,
-                  feedback: TabWidget(tab, feedback: true),
-                  child: icon,
-                ),
-              SizedBox(width: 8),
-              ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: 75),
-                child: Tooltip(
-                  message: title,
-                  child: Text(
-                    title,
-                    overflow: TextOverflow.fade,
-                    softWrap: false,
-                    style: Theme.of(context).textTheme.button?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface,
-                        fontWeight: FontWeight.normal),
+    final _tab = layoutDelegate.buildTabWidgetContainer(
+      selected,
+      () => tab.panel.selectTab(tab.id),
+      Observer(builder: (context) {
+        return layoutDelegate.buildTabWidget(
+            feedback
+                ? icon
+                : Draggable<Tab>(
+                    data: tab,
+                    feedback: TabWidget(
+                      tab,
+                      feedback: true,
+                      layout: layoutDelegate,
+                    ),
+                    child: icon,
                   ),
-                ),
-              ),
-              SizedBox(width: 8),
-              if (!tab.locked)
-                IconButton(
-                  icon: Icon(Icons.close),
-                  onPressed:
-                      !tab.locked ? () => tab.panel.closeTab(tab.id) : null,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-              SizedBox(width: 8),
-              VerticalDivider(width: 1),
-            ],
-          );
-        }),
-      ),
+            title,
+            !tab.locked
+                ? layoutDelegate.buildTabCloseButton(
+                    !tab.locked ? () => tab.panel.closeTab(tab.id) : null,
+                    selected)
+                : null,
+            selected);
+      }),
     );
 
     if (feedback) return Material(child: _tab);
@@ -101,21 +77,22 @@ class TabWidget extends StatelessWidget {
     return Observer(builder: (_) {
       final isLocked = tab.locked;
       return ContextMenu(
+        showOnTap: false,
         menuItems: [
           ContextMenuItem(
-            title: Text(isLocked ? 'Unlock' : 'Lock'),
-            icon: Icon(isLocked ? Icons.lock : Icons.lock_open),
+            title: isLocked ? 'Unlock' : 'Lock',
+            icon: isLocked ? Icons.lock : Icons.lock_open,
             onPressed: tab.toggleLock,
           ),
           ContextMenuItem(),
           ContextMenuItem(
-            title: Text('New tab'),
-            icon: Icon(Icons.add),
+            title: 'New tab',
+            icon: Icons.add,
             onPressed: () => tab.panel.newTab(tabId: tab.id),
           ),
           ContextMenuItem(
-            title: Text('New tab to the left'),
-            icon: Icon(Icons.add),
+            title: 'New tab to the left',
+            icon: Icons.add,
             onPressed: () => tab.panel.newTab(
               tabId: tab.id,
               position: TabPosition.before,
@@ -124,32 +101,29 @@ class TabWidget extends StatelessWidget {
           ContextMenuItem(),
           if (!isLocked)
             ContextMenuItem(
-              title: Text('Close'),
-              icon: Icon(Icons.close),
+              title: 'Close',
+              icon: Icons.close,
               onPressed: () => tab.panel.closeTab(tab.id),
             ),
           if (tab.panel.tabs.length > 1) ...[
             ContextMenuItem(
-              title: Text('Close others'),
-              icon: Icon(Icons.remove_circle),
+              title: 'Close others',
+              icon: Icons.remove_circle,
               onPressed: () => tab.panel.closeOtherTabs(tab.id),
             ),
             ContextMenuItem(
-              title: Text('Close right'),
-              icon: Icon(Icons.remove_circle),
+              title: 'Close right',
+              icon: Icons.remove_circle,
               onPressed: () => tab.panel.closeRight(tab.id),
             ),
             ContextMenuItem(
-              title: Text('Close left'),
-              icon: Icon(Icons.remove_circle),
+              title: 'Close left',
+              icon: Icons.remove_circle,
               onPressed: () => tab.panel.closeLeft(tab.id),
             ),
           ]
         ],
-        child: InkWell(
-          onTap: () => tab.panel.selectTab(tab.id),
-          child: _tab,
-        ),
+        child: _tab,
       );
     });
   }

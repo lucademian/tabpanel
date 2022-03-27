@@ -1,5 +1,6 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
+
+import 'context_menu_item.dart';
 
 @immutable
 class ContextMenu extends StatefulWidget {
@@ -47,13 +48,7 @@ class _ContextMenuState extends State<ContextMenu> {
       onTap: widget.showOnTap ? _showMenu : null,
       onSecondaryTap: _showMenu,
       onLongPress: _showMenu,
-      child: widget.icon != null
-          ? IconButton(
-              icon: widget.icon!,
-              onPressed: widget.showOnTap ? _showMenu : () {},
-              color: Theme.of(context).colorScheme.onPrimary,
-            )
-          : widget.child,
+      child: widget.child,
     );
   }
 
@@ -94,61 +89,21 @@ class _ContextMenuState extends State<ContextMenu> {
                   child: ConstrainedBox(
                     constraints: BoxConstraints(maxHeight: maxMenuHeight),
                     child: SingleChildScrollView(
-                      child: Container(
-                        width: maxMenuWidth,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade200,
-                          shape: BoxShape.rectangle,
-                          borderRadius:
-                              const BorderRadius.all(Radius.circular(5.0)),
-                          boxShadow: [
-                            const BoxShadow(
-                                color: Colors.black38,
-                                blurRadius: 10,
-                                spreadRadius: 1)
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius:
-                              const BorderRadius.all(Radius.circular(5.0)),
-                          child: Material(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: widget.menuItems.map((item) {
-                                if (item.icon == null && item.title == null) {
-                                  return Divider();
-                                }
-
-                                return InkWell(
-                                  onTap: () {
+                        child: SizedBox(
+                      width: maxMenuWidth,
+                      child: buildContextMenu(widget.menuItems
+                          .map((i) => ContextMenuItem(
+                                title: i.title,
+                                icon: i.icon,
+                                onPressed: () {
+                                  if (i.onPressed != null) {
                                     Navigator.pop(context);
-                                    item.onPressed?.call();
-                                  },
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 8.0),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.start,
-                                      children: [
-                                        SizedBox(width: 8),
-                                        if (item.icon != null) ...[
-                                          item.icon!,
-                                          SizedBox(width: 8)
-                                        ],
-                                        Expanded(child: item.title ?? Text('')),
-                                        SizedBox(width: 8)
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+                                    i.onPressed!.call();
+                                  }
+                                },
+                              ))
+                          .toList()),
+                    )),
                   ),
                 ),
               ],
@@ -160,21 +115,47 @@ class _ContextMenuState extends State<ContextMenu> {
       ),
     );
   }
-}
 
-class ContextMenuItem {
-  final Widget? title;
+  Widget buildContextMenu(List<ContextMenuItem> menuItems) => Container(
+        decoration: BoxDecoration(
+          color: Colors.grey.shade200,
+          shape: BoxShape.rectangle,
+          borderRadius: const BorderRadius.all(Radius.circular(5.0)),
+          boxShadow: [
+            const BoxShadow(
+                color: Colors.black38, blurRadius: 10, spreadRadius: 1)
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: const BorderRadius.all(Radius.circular(5.0)),
+          child: Material(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: menuItems.map(_buildContextMenuItem).toList(),
+            ),
+          ),
+        ),
+      );
+  Widget _buildContextMenuItem(ContextMenuItem item) {
+    if (item.icon == null && item.title == null) {
+      return Divider();
+    }
 
-  final Widget? icon;
-
-  final Function()? onPressed;
-
-  final Widget? child;
-
-  ContextMenuItem({
-    this.title,
-    this.icon,
-    this.onPressed,
-    this.child,
-  });
+    return InkWell(
+      onTap: item.onPressed,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            SizedBox(width: 8),
+            if (item.icon != null) ...[Icon(item.icon!), SizedBox(width: 8)],
+            Expanded(child: Text(item.title ?? '')),
+            SizedBox(width: 8)
+          ],
+        ),
+      ),
+    );
+  }
 }
